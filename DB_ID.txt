@@ -1,0 +1,5 @@
+항목	값
+Account ID	9a574dfe1ae12d6ce8b717dfbbbc0ffd
+Database ID	e60d3a7f-2ae9-4058-af50-f4f2b34d209d
+국토부 API 키	799e4f4eff91d5210537e04f7d6b6f4ff3b2d8645a6e0437dc317165a2b19fb3
+CF API Token	cfut_ZSlg5zCyvvn70Mricf1gcATxyIuNcoTgz6awBjsR9f1e8bcb

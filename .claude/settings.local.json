@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pandoc \"C:/_클로드/국토부 실거래가 검색기/아파트분석_인수인계서_v2.docx\" -o /tmp/handover.md)",
+      "Bash(where node:*)",
+      "Bash(where npm:*)",
+      "Bash(export PATH=\"$PATH:/c/Program Files/nodejs\")",
+      "Bash(npm -v)",
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --no-import-alias --use-npm)",
+      "Bash(mkdir -p /c/_temp_apt)",
+      "Read(//c//**)",
+      "Bash(npx create-next-app@latest apt-trades --typescript --tailwind --eslint --app --src-dir --no-import-alias --use-npm)",
+      "Bash(export 'PATH=$PATH:/c/Program Files/nodejs')",
+      "Read(//c/_temp_apt/**)",
+      "Bash(rm -rf apt-trades)",
+      "Bash(npx create-next-app@latest apt-trades --typescript --tailwind --eslint --app --src-dir --no-import-alias --use-npm --turbopack)",
+      "Bash(yes)",
+      "Bash(cp -r /c/_temp_apt/apt-trades/* /c/_temp_apt/apt-trades/.* \"C:/_클로드/국토부 실거래가 검색기/\")",
+      "Bash(rm -rf /c/_temp_apt)",
+      "WebSearch",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)"
+    ]
+  }
+}
