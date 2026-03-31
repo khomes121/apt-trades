@@ -2,7 +2,7 @@ name: 국토부 실거래 증분 수집
 
 on:
   schedule:
-    # 매월 1일 새벽 3시 KST (= UTC 18:00 전월 마지막일)
+    # 매월 1일 새벽 3시 KST (= UTC 18:00)
     - cron: '0 18 1 * *'
   workflow_dispatch: # 수동 실행 가능
 
@@ -26,6 +26,5 @@ jobs:
         run: npx tsx scripts/collect.ts
         env:
           MOLIT_API_KEY: ${{ secrets.MOLIT_API_KEY }}
-          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
-          CF_D1_DATABASE_ID: ${{ secrets.CF_D1_DATABASE_ID }}
-          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
