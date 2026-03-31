@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useReducer, useState } from 'react';
+import Link from 'next/link';
 import RegionSelector from '@/components/RegionSelector';
 import FilterPanel from '@/components/FilterPanel';
 import ResultTable from '@/components/ResultTable';
@@ -21,13 +22,18 @@ function defaultParams(): SearchParams {
     date_to: dateTo,
     diff_operator: 'AND',
     exclude_cancelled: true,
-    min_trade_count: 2,
+    exclude_direct: true,
+    min_trade_count: 1,
   };
 }
 
-type Action = Partial<SearchParams> & { sgg_codes?: string[] };
+type Action = Partial<SearchParams> & { _reset?: boolean };
 
 function reducer(state: SearchParams, action: Action): SearchParams {
+  if (action._reset) {
+    const { _reset, ...next } = action;
+    return next as SearchParams;
+  }
   return { ...state, ...action };
 }
 
@@ -54,8 +60,8 @@ export default function HomePage() {
   }, [regions]);
 
   async function handleSearch() {
-    if (params.sgg_codes.length === 0) {
-      setError('지역을 선택해주세요.');
+    if (params.sgg_codes.length === 0 && !params.apt_nm?.trim()) {
+      setError('지역을 선택하거나 단지명을 입력해주세요.');
       return;
     }
     setLoading(true);
@@ -80,12 +86,22 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b px-6 py-4 shadow-sm">
-        <h1 className="text-xl font-bold text-gray-800">아파트 실거래가 변동 분석</h1>
-        <p className="text-sm text-gray-500 mt-0.5">국토부 실거래 DB 기반 · 동일 단지/평형 내 가격 변동 탐지</p>
+        <div>
+          <h1 className="text-xl font-bold text-gray-800">아파트 실거래가 변동 분석</h1>
+          <p className="text-sm text-gray-500 mt-0.5">국토부 실거래 DB 기반 · 동일 단지/평형 내 가격 변동 탐지</p>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <Link href="/trend" className="text-sm text-blue-600 border border-blue-300 rounded-lg px-3 py-1.5 hover:bg-blue-50 transition-colors">
+            지역 시세 동향
+          </Link>
+          <Link href="/daily" className="text-sm text-blue-600 border border-blue-300 rounded-lg px-3 py-1.5 hover:bg-blue-50 transition-colors">
+            날짜별 실거래
+          </Link>
+        </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <div className="bg-white rounded-xl border p-5 shadow-sm">
             <h2 className="font-semibold text-gray-700 mb-3">지역 선택</h2>
             {regionsLoading ? (
@@ -99,8 +115,14 @@ export default function HomePage() {
             )}
           </div>
 
-          <div className="lg:col-span-2 bg-white rounded-xl border p-5 shadow-sm">
-            <h2 className="font-semibold text-gray-700 mb-3">검색 조건</h2>
+          <div className="md:col-span-1 lg:col-span-2 bg-white rounded-xl border p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold text-gray-700">검색 조건</h2>
+              <button
+                onClick={() => dispatch({ ...defaultParams(), _reset: true })}
+                className="px-2.5 py-1 text-xs border border-gray-300 text-gray-500 rounded-lg hover:bg-gray-50 transition-colors"
+              >초기화</button>
+            </div>
             <FilterPanel params={params} onChange={p => dispatch(p)} />
           </div>
         </div>
