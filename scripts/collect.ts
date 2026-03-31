@@ -8,9 +8,25 @@
 
 import { XMLParser } from 'fast-xml-parser';
 import { execSync } from 'child_process';
-import { writeFileSync, unlinkSync } from 'fs';
+import { writeFileSync, unlinkSync, mkdirSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+
+function saveFailedLog(failedCombos: string[], label: string) {
+  if (failedCombos.length === 0) return;
+  const date = new Date().toISOString().slice(0, 10);
+  const dir  = join(process.cwd(), 'logs');
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, `failed-${label}-${date}.txt`);
+  const content = [
+    `수집 실패 목록 (${label} / ${date})`,
+    `총 ${failedCombos.length}건`,
+    '',
+    ...failedCombos,
+  ].join('\n');
+  writeFileSync(file, content, 'utf-8');
+  console.log(`\n실패 로그 저장: ${file}`);
+}
 
 const API_BASE = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev';
 const API_KEY  = process.env.MOLIT_API_KEY!;
@@ -280,6 +296,7 @@ async function main() {
   if (failedCombos.length > 0) {
     console.log(`\n⚠️ 최종 실패 목록 (수동 재실행 필요):`);
     failedCombos.forEach(c => console.log(`  - ${c}`));
+    saveFailedLog(failedCombos, 'monthly');
   }
 }
 
