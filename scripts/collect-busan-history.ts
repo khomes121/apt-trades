@@ -240,22 +240,38 @@ async function main() {
   let done = 0;
   let totalInserted = 0;
   let errorCount = 0;
+  const failedCombos: string[] = []; // 최종 실패 목록
+
+  // 재시도 포함 수집 함수 (최대 3회)
+  async function collectWithRetry(sggCd: string, dealYmd: string): Promise<number> {
+    const MAX_RETRY = 3;
+    for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
+      try {
+        const items = await fetchTrades(sggCd, dealYmd);
+        if (items.length === 0) return 0;
+        return executeBatched(items, sggCd);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message.slice(0, 100) : String(e);
+        if (attempt < MAX_RETRY) {
+          log(`재시도 ${attempt}/${MAX_RETRY - 1} ${sggCd}/${dealYmd}: ${msg}`);
+          await sleep(3000 * attempt); // 3초, 6초 대기
+        } else {
+          log(`최종 실패 ${sggCd}/${dealYmd}: ${msg}`);
+          failedCombos.push(`${sggCd}/${dealYmd}`);
+          errorCount++;
+        }
+      }
+    }
+    return 0;
+  }
 
   for (const dealYmd of months) {
     let monthInserted = 0;
     for (const sggCd of sggCodes) {
       done++;
-      try {
-        const items = await fetchTrades(sggCd, dealYmd);
-        if (items.length > 0) {
-          const count = executeBatched(items, sggCd);
-          monthInserted += count;
-          totalInserted += count;
-        }
-      } catch (e) {
-        errorCount++;
-        log(`오류 ${sggCd}/${dealYmd}: ${e instanceof Error ? e.message : e}`);
-      }
+      const count = await collectWithRetry(sggCd, dealYmd);
+      monthInserted += count;
+      totalInserted += count;
       await sleep(DELAY_MS);
 
       // 진행률 10%마다 로그
@@ -271,6 +287,10 @@ async function main() {
 
   log(`\n=== 완료 ===`);
   log(`총 수집: ${totalInserted}건 | 오류: ${errorCount}건`);
+  if (failedCombos.length > 0) {
+    log(`\n⚠️ 최종 실패 목록 (수동 재실행 필요):`);
+    failedCombos.forEach(c => log(`  - ${c}`));
+  }
 }
 
 main().catch(e => { log(`치명적 오류: ${e}`); process.exit(1); });
