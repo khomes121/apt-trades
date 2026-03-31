@@ -1,0 +1,39 @@
+name: 부산 과거 데이터 수집
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_ym:
+        description: '시작 월 (YYYYMM)'
+        required: true
+        default: '202001'
+      end_ym:
+        description: '종료 월 (YYYYMM)'
+        required: true
+        default: '202402'
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 의존성 설치
+        run: npm ci
+
+      - name: 부산 과거 데이터 수집
+        run: npx tsx scripts/collect-busan-history.ts
+        env:
+          MOLIT_API_KEY: ${{ secrets.MOLIT_API_KEY }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_D1_DATABASE_ID: ${{ secrets.CF_D1_DATABASE_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          COLLECT_START_YM: ${{ github.event.inputs.start_ym }}
+          COLLECT_END_YM: ${{ github.event.inputs.end_ym }}
