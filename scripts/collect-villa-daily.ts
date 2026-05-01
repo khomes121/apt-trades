@@ -26,8 +26,8 @@ const DELAY_MS = 80;
 const NUM_OF_ROWS = 1000;
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
 
-// 기본: 부산만 (시도코드 26). 비우면 전국.
-const TARGET_SIDO_CD = process.env.COLLECT_VILLA_SIDO ?? '26';
+// 기본: 전국. COLLECT_VILLA_SIDO=26 주면 부산만 등 시도 단위 필터.
+const TARGET_SIDO_CD = process.env.COLLECT_VILLA_SIDO ?? '';
 
 // ── 유틸 ──────────────────────────────────────────────────────────────────
 

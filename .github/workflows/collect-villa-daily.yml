@@ -2,8 +2,8 @@ name: 국토부 빌라(연립다세대) 일별 수집
 
 on:
   schedule:
-    # 매일 새벽 3시 30분 KST (= UTC 18:30) — 아파트 daily 끝난 직후 시작
-    - cron: '30 18 * * *'
+    # 매일 새벽 5시 KST (= UTC 20:00) — 아파트 daily 완전 종료 후 시작
+    - cron: '0 20 * * *'
   workflow_dispatch: # 수동 실행 가능
 
 permissions:
@@ -32,8 +32,7 @@ jobs:
           KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          # 부산만 수집. 전국으로 확장 시 빈 문자열 또는 이 줄 삭제
-          COLLECT_VILLA_SIDO: '26'
+          # 전국 수집 (COLLECT_VILLA_SIDO 미설정 = 전국)
 
       - name: 실패 로그 커밋
         if: always()
