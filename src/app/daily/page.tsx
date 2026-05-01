@@ -1,8 +1,6 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import Link from 'next/link';
-
 interface SummaryRow {
   sgg_cd: string;
   sgg_nm: string;
@@ -81,15 +79,6 @@ export default function DailyPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* 네비게이션 */}
-      <nav className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 flex items-center gap-1 h-12">
-          <Link href="/" className="px-3 py-1.5 rounded text-sm text-gray-600 hover:bg-gray-100">변동 분석</Link>
-          <Link href="/trend" className="px-3 py-1.5 rounded text-sm text-gray-600 hover:bg-gray-100">추이 분석</Link>
-          <span className="px-3 py-1.5 rounded text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200">날짜별 실거래</span>
-        </div>
-      </nav>
-
       <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
 
         {/* 날짜 선택 */}

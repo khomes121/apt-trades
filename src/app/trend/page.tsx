@@ -6,8 +6,6 @@ import RegionSelector from '@/components/RegionSelector';
 import SggTrendTable from '@/components/SggTrendTable';
 import UmdDrilldown from '@/components/UmdDrilldown';
 import TrendRecommendations from '@/components/TrendRecommendations';
-import Link from 'next/link';
-
 const MONTH_OPTIONS = [
   { label: '1개월', value: 1 },
   { label: '3개월', value: 3 },
@@ -111,19 +109,9 @@ export default function TrendPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b px-6 py-4 shadow-sm">
-        <div className="flex items-center gap-4">
-          <div>
-            <h1 className="text-xl font-bold text-gray-800">지역 시세 동향</h1>
-            <p className="text-sm text-gray-500 mt-0.5">구/군 단위 ㎡당 평균 단가 변동 · 시세 이동 지역 탐지</p>
-          </div>
-          <div className="ml-auto flex items-center gap-2">
-            <Link href="/" className="text-sm text-blue-600 border border-blue-300 rounded-lg px-3 py-1.5 hover:bg-blue-50 transition-colors">
-              변동 분석
-            </Link>
-            <Link href="/daily" className="text-sm text-blue-600 border border-blue-300 rounded-lg px-3 py-1.5 hover:bg-blue-50 transition-colors">
-              날짜별 실거래
-            </Link>
-          </div>
+        <div>
+          <h1 className="text-xl font-bold text-gray-800">지역 시세 동향</h1>
+          <p className="text-sm text-gray-500 mt-0.5">구/군 단위 ㎡당 평균 단가 변동 · 시세 이동 지역 탐지</p>
         </div>
       </header>
 

@@ -86,18 +86,8 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b px-6 py-4 shadow-sm">
-        <div>
-          <h1 className="text-xl font-bold text-gray-800">아파트 실거래가 변동 분석</h1>
-          <p className="text-sm text-gray-500 mt-0.5">국토부 실거래 DB 기반 · 동일 단지/평형 내 가격 변동 탐지</p>
-        </div>
-        <div className="ml-auto flex items-center gap-2">
-          <Link href="/trend" className="text-sm text-blue-600 border border-blue-300 rounded-lg px-3 py-1.5 hover:bg-blue-50 transition-colors">
-            지역 시세 동향
-          </Link>
-          <Link href="/daily" className="text-sm text-blue-600 border border-blue-300 rounded-lg px-3 py-1.5 hover:bg-blue-50 transition-colors">
-            날짜별 실거래
-          </Link>
-        </div>
+        <h1 className="text-xl font-bold text-gray-800">아파트 실거래가 변동 분석</h1>
+        <p className="text-sm text-gray-500 mt-0.5">국토부 실거래 DB 기반 · 동일 단지/평형 내 가격 변동 탐지</p>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">

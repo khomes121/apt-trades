@@ -30,6 +30,11 @@ export function buildSearchQuery(p: SearchParams): QueryResult {
     where.push("(t.cdeal_type IS NULL OR t.cdeal_type != 'Y')");
   }
 
+  // 직거래 제외
+  if (p.exclude_direct) {
+    where.push("(t.dealing_gbn IS NULL OR t.dealing_gbn != '직거래')");
+  }
+
   // 거래유형
   if (p.dealing_gbn) { where.push('t.dealing_gbn = ?'); params.push(p.dealing_gbn); }
 
@@ -75,7 +80,7 @@ export function buildSearchQuery(p: SearchParams): QueryResult {
       t.apt_nm,
       t.sgg_cd,
       t.umd_nm,
-      t.area_group,
+      ROUND(t.area_group / 5.0) * 5 AS area_group,
       t.build_year,
       COUNT(*) AS trade_count,
       MIN(t.deal_amount) AS min_price,
@@ -84,7 +89,7 @@ export function buildSearchQuery(p: SearchParams): QueryResult {
       ROUND(CAST(MAX(t.deal_amount) - MIN(t.deal_amount) AS REAL) / MIN(t.deal_amount) * 100, 1) AS diff_rate
     FROM apt_trades t
     ${whereClause}
-    GROUP BY t.apt_nm, t.sgg_cd, t.umd_nm, t.area_group, t.build_year
+    GROUP BY t.apt_nm, t.sgg_cd, t.umd_nm, ROUND(t.area_group / 5.0) * 5, t.build_year
     ${havingClause}
     ORDER BY diff_amount DESC
     LIMIT 500
