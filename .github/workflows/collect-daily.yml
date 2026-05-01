@@ -32,6 +32,15 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
+      # 신규 단지(apt_coords 미적재) 좌표 자동 백필
+      - name: 신규 아파트 단지 좌표 지오코딩
+        run: npx tsx scripts/geocode-apt.ts
+        env:
+          KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          GEOCODE_LIMIT: '500'   # 일별 신규 단지는 보통 수십 건 수준
+
       - name: 실패 로그 커밋
         if: always()
         run: |
