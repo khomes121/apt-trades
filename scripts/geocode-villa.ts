@@ -20,9 +20,10 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 
 const KAKAO_KEY = process.env.KAKAO_REST_API_KEY!;
-const CF_ACCOUNT_ID = process.env.CF_ACCOUNT_ID!;
-const CF_D1_DATABASE_ID = process.env.CF_D1_DATABASE_ID!;
-const CF_API_TOKEN = process.env.CF_API_TOKEN!;
+// GitHub Actions(CLOUDFLARE_*) / 로컬(.env.local 의 CF_*) 둘 다 지원
+const CF_ACCOUNT_ID = process.env.CF_ACCOUNT_ID ?? process.env.CLOUDFLARE_ACCOUNT_ID!;
+const CF_D1_DATABASE_ID = process.env.CF_D1_DATABASE_ID ?? 'e60d3a7f-2ae9-4058-af50-f4f2b34d209d';
+const CF_API_TOKEN = process.env.CF_API_TOKEN ?? process.env.CLOUDFLARE_API_TOKEN!;
 const DB_NAME = 'apt-trades';
 const DELAY_MS = 100;
 const LIMIT = parseInt(process.env.GEOCODE_LIMIT ?? '500', 10);
