@@ -12,6 +12,9 @@ on:
         required: true
         default: '202402'
 
+permissions:
+  contents: write
+
 jobs:
   collect:
     runs-on: ubuntu-latest
@@ -44,4 +47,4 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add logs/
           git diff --staged --quiet || git commit -m "logs: 부산 과거 수집 실패 목록 $(date '+%Y-%m-%d')"
-          git push
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:main
