@@ -1,0 +1,77 @@
+name: 좌표 백필 (수동 일괄 - 백로그 소진)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: '대상: villa / apt / both'
+        required: false
+        default: 'both'
+      limit:
+        description: '회당 처리 건수 (GEOCODE_LIMIT)'
+        required: false
+        default: '5000'
+      max_rounds:
+        description: '최대 반복 횟수 (안전장치)'
+        required: false
+        default: '80'
+
+permissions:
+  contents: read
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: 의존성 설치
+        run: npm ci
+
+      - name: 빌라 좌표 백필 (백로그 소진까지 반복)
+        if: inputs.target == 'villa' || inputs.target == 'both'
+        env:
+          KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          GEOCODE_LIMIT: ${{ inputs.limit }}
+        run: |
+          rounds=${{ inputs.max_rounds }}
+          for i in $(seq 1 $rounds); do
+            echo "===== villa round $i / $rounds ====="
+            out=$(npx tsx scripts/geocode-villa.ts 2>&1) || true
+            echo "$out" | tail -12
+            if echo "$out" | grep -q "처리할 거래 없음"; then
+              echo ">>> 빌라 백로그 전부 소진. 완료."; break
+            fi
+            succ=$(echo "$out" | grep -oE "성공 [0-9]+" | head -1 | grep -oE "[0-9]+")
+            if [ "${succ:-0}" = "0" ]; then
+              echo ">>> 신규 성공 0 (남은 건 미발견 또는 카카오 쿼터 소진). 안전 중단."; break
+            fi
+          done
+
+      - name: 아파트 좌표 백필 (백로그 소진까지 반복)
+        if: inputs.target == 'apt' || inputs.target == 'both'
+        env:
+          KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          GEOCODE_LIMIT: ${{ inputs.limit }}
+        run: |
+          rounds=${{ inputs.max_rounds }}
+          for i in $(seq 1 $rounds); do
+            echo "===== apt round $i / $rounds ====="
+            out=$(npx tsx scripts/geocode-apt.ts 2>&1) || true
+            echo "$out" | tail -12
+            if echo "$out" | grep -q "처리할 단지 없음"; then
+              echo ">>> 아파트 백로그 전부 소진. 완료."; break
+            fi
+            succ=$(echo "$out" | grep -oE "성공 [0-9]+" | head -1 | grep -oE "[0-9]+")
+            if [ "${succ:-0}" = "0" ]; then
+              echo ">>> 신규 성공 0 (남은 건 미발견 또는 카카오 쿼터 소진). 안전 중단."; break
+            fi
+          done
