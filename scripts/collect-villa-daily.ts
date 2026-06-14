@@ -25,6 +25,7 @@ const DB_NAME = 'apt-trades';
 const DELAY_MS = 80;
 const NUM_OF_ROWS = 1000;
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+const SCRIPT_START = Date.now();
 
 // 기본: 전국. COLLECT_VILLA_SIDO=26 주면 부산만 등 시도 단위 필터.
 const TARGET_SIDO_CD = process.env.COLLECT_VILLA_SIDO ?? '';
@@ -273,14 +274,18 @@ async function geocodeKakao(sidoNm: string, sggNm: string, umdNm: string, jibun:
 async function backfillCoords(): Promise<void> {
   console.log('\n=== 좌표 백필 ===');
 
+  // 좌표 백필 상한 (기본 5000, env BACKFILL_LIMIT 로 조정). 최신 거래 지번부터 처리.
+  const BACKFILL_LIMIT = Math.max(1, Math.min(20000, parseInt(process.env.BACKFILL_LIMIT ?? '5000', 10)));
   const { results: pending } = await d1Query<PendingTrade>(
-    `SELECT DISTINCT v.sgg_cd, v.umd_nm, v.jibun, r.sido_nm, r.sgg_nm
+    `SELECT v.sgg_cd, v.umd_nm, v.jibun, r.sido_nm, r.sgg_nm, MAX(v.deal_date) AS latest_deal
      FROM villa_trades v
      JOIN regions r ON v.sgg_cd = r.sgg_cd
      WHERE v.lat IS NULL
        AND v.jibun IS NOT NULL AND v.jibun != ''
        AND v.umd_nm IS NOT NULL AND v.umd_nm != ''
-     LIMIT 1000`
+     GROUP BY v.sgg_cd, v.umd_nm, v.jibun
+     ORDER BY latest_deal DESC
+     LIMIT ${BACKFILL_LIMIT}`
   );
   console.log(`좌표 미할당 지번: ${pending.length}개`);
   if (pending.length === 0) return;
@@ -300,12 +305,17 @@ async function backfillCoords(): Promise<void> {
   }
   console.log(`캐시 hit: ${cacheMap.size}개 / 신규 카카오 호출: ${pending.length - cacheMap.size}개`);
 
-  // 신규 지오코딩
+  // 신규 지오코딩 (시간 예산 초과 시 안전 중단 — 워크플로 타임아웃 방지)
+  const BACKFILL_BUDGET_MS = Math.max(60_000, parseInt(process.env.BACKFILL_BUDGET_MS ?? String(90 * 60 * 1000), 10));
   let geocoded = 0, notFound = 0;
   const newCoords: Array<{ sgg_cd: string; umd_nm: string; jibun: string; lat: number; lng: number; raw: string }> = [];
   for (const item of pending) {
     const key = `${item.sgg_cd}|${item.umd_nm}|${item.jibun}`;
     if (cacheMap.has(key)) continue;
+    if (Date.now() - SCRIPT_START > BACKFILL_BUDGET_MS) {
+      console.log(`⏱ 시간 예산(${Math.round(BACKFILL_BUDGET_MS / 60000)}분) 도달 — 신규 지오코딩 중단. 지금까지 ${geocoded}건 처리, 나머지는 다음 실행에서 이어서.`);
+      break;
+    }
     try {
       const r = await geocodeKakao(item.sido_nm, item.sgg_nm, item.umd_nm, item.jibun);
       if (r) {
