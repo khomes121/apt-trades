@@ -253,7 +253,11 @@ function buildUpsertSQL(items: VillaItem[], sggCd: string): string {
     cdeal_type   = excluded.cdeal_type,
     cdeal_day    = excluded.cdeal_day,
     rgst_date    = excluded.rgst_date,
-    collected_at = datetime('now');`;
+    collected_at = datetime('now')
+  WHERE villa_trades.dealing_gbn IS NOT excluded.dealing_gbn
+     OR villa_trades.cdeal_type  IS NOT excluded.cdeal_type
+     OR villa_trades.cdeal_day   IS NOT excluded.cdeal_day
+     OR villa_trades.rgst_date   IS NOT excluded.rgst_date;`;
 }
 
 // ── 로그 ──────────────────────────────────────────────────────────────────

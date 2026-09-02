@@ -203,7 +203,15 @@ function buildUpsertSQL(items: TradeItem[], sggCd: string): string {
     cdeal_day     = excluded.cdeal_day,
     rgst_date     = excluded.rgst_date,
     land_leasehold= excluded.land_leasehold,
-    collected_at  = datetime('now');`;
+    collected_at  = datetime('now')
+  WHERE apt_trades.apt_dong       IS NOT excluded.apt_dong
+     OR apt_trades.dealing_gbn    IS NOT excluded.dealing_gbn
+     OR apt_trades.sler_gbn       IS NOT excluded.sler_gbn
+     OR apt_trades.buyer_gbn      IS NOT excluded.buyer_gbn
+     OR apt_trades.cdeal_type     IS NOT excluded.cdeal_type
+     OR apt_trades.cdeal_day      IS NOT excluded.cdeal_day
+     OR apt_trades.rgst_date      IS NOT excluded.rgst_date
+     OR apt_trades.land_leasehold IS NOT excluded.land_leasehold;`;
 }
 
 // ── 메인 ──────────────────────────────────────────────────────────────────
