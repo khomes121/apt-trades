@@ -14,7 +14,7 @@ interface TopTrade {
 }
 interface SidoRow { sido_cd: string; sido_nm: string; trade_count: number; avg_amount: number }
 interface HomeData {
-  latestDate: string | null; daily: DailyRow[]; topTrades: TopTrade[]; bySido: SidoRow[]; approxTotal: number | null;
+  latestDate: string | null; daily: DailyRow[]; topTrades: TopTrade[]; bySido: SidoRow[];
 }
 interface Health {
   apt?: { lastCollectedAt?: string; changed24h?: number; latestDealDate?: string };
@@ -142,8 +142,11 @@ export default function HomePage() {
                 hint="직전 30일 대비" />
               <Stat label="7일 내 최고가" value={top[0] ? formatEok(top[0].deal_amount) : '-'}
                 hint={top[0] ? `${top[0].apt_nm} · ${top[0].sgg_nm ?? ''}` : undefined} />
-              <Stat label="누적 실거래 DB" value={data?.approxTotal ? `${(data.approxTotal / 10000).toFixed(0)}만` : '-'} unit="건+"
-                hint={health?.apt?.lastCollectedAt ? `마지막 적재 ${formatUtcToKst(health.apt.lastCollectedAt)}` : '아파트 매매 기준'} />
+              <Stat label="마지막 데이터 적재"
+                value={health?.apt?.lastCollectedAt ? formatUtcToKst(health.apt.lastCollectedAt).split(' ').slice(0, 2).join(' ') : '-'}
+                hint={health?.apt?.lastCollectedAt
+                  ? `${formatUtcToKst(health.apt.lastCollectedAt).split(' ')[2]} · 24시간 신규·변경 ${(health.apt.changed24h ?? 0).toLocaleString()}건`
+                  : '매일 새벽 자동 수집'} />
             </>
           )}
         </div>

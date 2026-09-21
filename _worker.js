@@ -191,7 +191,7 @@ export default {
           };
           const from60 = shift(59), from7 = shift(6), from30 = shift(29);
 
-          const [daily, top, sido, approx] = await Promise.all([
+          const [daily, top, sido] = await Promise.all([
             // 일별 거래량·평균가 (최근 60일 — 앞 30일은 비교용)
             env.DB.prepare(`
               SELECT deal_date, COUNT(*) AS trade_count, ROUND(AVG(deal_amount)) AS avg_amount
@@ -216,8 +216,6 @@ export default {
                 AND (t.cdeal_type IS NULL OR t.cdeal_type != 'Y')
               GROUP BY r.sido_cd, r.sido_nm ORDER BY trade_count DESC
             `).bind(from30, latestDate).all(),
-            // 누적 건수는 전수 COUNT 대신 마지막 id 로 어림한다 (수백만 행 스캔 방지)
-            env.DB.prepare('SELECT MAX(id) AS n FROM apt_trades').first(),
           ]);
           return {
             generatedAt: new Date().toISOString(),
@@ -225,7 +223,6 @@ export default {
             daily: daily.results,
             topTrades: top.results,
             bySido: sido.results,
-            approxTotal: approx?.n ?? null,
           };
         });
       } catch (e) {
