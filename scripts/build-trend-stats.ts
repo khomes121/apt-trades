@@ -3,8 +3,11 @@
  * - sgg_monthly_stats: 구/군 단위 월별 평균 ㎡당 단가
  * - umd_monthly_stats: 동 단위 월별 평균 ㎡당 단가
  *
- * 실행: npx tsx scripts/build-trend-stats.ts
- * 특정 월만 재계산: REBUILD_YM=202603 npx tsx scripts/build-trend-stats.ts
+ * 실행 (기본 = 따라잡기): npx tsx scripts/build-trend-stats.ts
+ *   → 통계가 멈춘 달부터 이번 달까지 다시 계산한다. 최소 최근 3개월은 항상 포함(신고 지연분 반영).
+ *   → 매일 새벽 collect-daily.yml 이 수집 뒤에 이걸 돌린다. (2026-09: 자동 실행이 없어 3월에서 멈춰 있었다)
+ * 특정 월만:  REBUILD_YM=202603 npx tsx scripts/build-trend-stats.ts
+ * 전체 재계산: REBUILD_ALL=1 npx tsx scripts/build-trend-stats.ts
  */
 
 import { execSync } from 'child_process';
@@ -12,7 +15,10 @@ import { writeFileSync, unlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
-const WRANGLER = `node "C:\\Users\\HOMES\\AppData\\Local\\npm-cache\\_npx\\32026684e21afda6\\node_modules\\wrangler\\bin\\wrangler.js"`;
+const WRANGLER = process.platform === 'win32'
+  ? `node "C:\\Users\\HOMES\\AppData\\Local\\npm-cache\\_npx\\32026684e21afda6\\node_modules\\wrangler\\bin\\wrangler.js"`
+  : `npx wrangler`;
+const EXEC_TIMEOUT_MS = 300_000;
 const DB_NAME  = 'apt-trades';
 
 function extractJSON(raw: string): string {
@@ -28,7 +34,7 @@ function executeSQLFile(sql: string): void {
   try {
     const raw = execSync(
       `${WRANGLER} d1 execute ${DB_NAME} --remote --file="${tmpFile}" --json 2>&1`,
-      { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 }
+      { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024, timeout: EXEC_TIMEOUT_MS }
     );
     const json = JSON.parse(extractJSON(raw));
     const changes = json[0]?.meta?.changes ?? 0;
@@ -44,7 +50,7 @@ function executeSQLFile(sql: string): void {
 function executeCommand(cmd: string): unknown[] {
   const raw  = execSync(
     `${WRANGLER} d1 execute ${DB_NAME} --remote --command="${cmd}" --json 2>&1`,
-    { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 }
+    { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024, timeout: EXEC_TIMEOUT_MS }
   );
   const json = JSON.parse(extractJSON(raw));
   return json[0]?.results ?? [];
@@ -55,7 +61,10 @@ function rebuildMonths(yms: string[]): void {
   for (const ym of yms) {
     const year  = ym.slice(0, 4);
     const month = ym.slice(4, 6);
-    const datePrefix = `${year}-${month}`;
+    // LIKE 'YYYY-MM-%' 는 인덱스를 못 타서 달마다 테이블 전체(수백만 행)를 훑는다 → 날짜 범위로 바꿔 deal_date 인덱스를 탄다
+    const dateFrom = `${year}-${month}-01`;
+    const next     = new Date(Date.UTC(Number(year), Number(month), 1));
+    const dateTo   = `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, '0')}-01`;
 
     console.log(`\n[${ym}] 집계 계산 중...`);
 
@@ -70,7 +79,7 @@ SELECT
   COUNT(*) AS trade_count,
   datetime('now') AS updated_at
 FROM apt_trades
-WHERE deal_date LIKE '${datePrefix}-%'
+WHERE deal_date >= '${dateFrom}' AND deal_date < '${dateTo}'
   AND area_group > 0
   AND deal_amount > 0
   AND (cdeal_type IS NULL OR cdeal_type <> 'Y')
@@ -89,7 +98,7 @@ SELECT
   COUNT(*) AS trade_count,
   datetime('now') AS updated_at
 FROM apt_trades
-WHERE deal_date LIKE '${datePrefix}-%'
+WHERE deal_date >= '${dateFrom}' AND deal_date < '${dateTo}'
   AND area_group > 0
   AND deal_amount > 0
   AND (cdeal_type IS NULL OR cdeal_type <> 'Y')
@@ -117,6 +126,19 @@ async function main() {
     // 특정 월만
     targetMonths = [rebuildYm];
     console.log(`특정 월 재계산: ${rebuildYm}`);
+  } else if (!process.env.REBUILD_ALL) {
+    // 따라잡기: 통계가 멈춘 달 ~ 이번 달 (최소 최근 3개월)
+    const now = new Date(Date.now() + 9 * 3600e3); // KST
+    const ymOf = (d: Date) => `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    const floor = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 2, 1));
+    const last  = (executeCommand('SELECT MAX(ym) AS ym FROM sgg_monthly_stats') as { ym: string | null }[])[0]?.ym;
+    let start = floor;
+    if (last && last < ymOf(floor)) start = new Date(Date.UTC(Number(last.slice(0, 4)), Number(last.slice(4, 6)) - 1, 1));
+    targetMonths = [];
+    for (let d = start; ymOf(d) <= ymOf(now); d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))) {
+      targetMonths.push(ymOf(d));
+    }
+    console.log(`따라잡기: ${targetMonths[0]} ~ ${targetMonths[targetMonths.length - 1]} (${targetMonths.length}개월, 기존 마지막 ${last ?? '없음'})`);
   } else {
     // 전체 월 목록 조회 후 전부 계산
     console.log('전체 월 목록 조회 중...');

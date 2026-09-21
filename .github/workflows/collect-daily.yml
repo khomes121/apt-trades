@@ -41,6 +41,17 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           GEOCODE_LIMIT: '500'   # 일별 신규 단지는 보통 수십 건 수준
 
+      # 시세 동향 페이지가 읽는 월별 통계(sgg/umd_monthly_stats) 갱신.
+      # 예전엔 수동 스크립트뿐이라 2026-03 에서 멈춰 있었다. 멈춘 달부터 이번 달까지 알아서 따라잡는다.
+      # 수집이 중간에 끊긴 날에도 들어온 만큼은 반영되게 always() 로 둔다.
+      - name: 시세 동향 월별 통계 갱신
+        if: always()
+        run: npx tsx scripts/build-trend-stats.ts
+        timeout-minutes: 30
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
       - name: 실패 로그 커밋
         if: always()
         run: |
