@@ -107,9 +107,131 @@ const corsHeaders = {
   'Content-Type': 'application/json; charset=utf-8',
 };
 
+/** 무거운 집계 응답을 엣지에 잠깐 붙잡아 둔다 (D1 읽기 한도 보호). 캐시가 안 되는 환경이면 그냥 매번 계산한다. */
+async function cachedJson(request, ctx, ttlSec, produce) {
+  const key = new Request(request.url, { method: 'GET' });
+  let cache = null;
+  try {
+    cache = caches.default;
+    const hit = await cache.match(key);
+    if (hit) return hit;
+  } catch { cache = null; }
+  const body = await produce();
+  const res = new Response(JSON.stringify(body), {
+    headers: { ...corsHeaders, 'Cache-Control': `public, max-age=${ttlSec}` },
+  });
+  if (cache && ctx) { try { ctx.waitUntil(cache.put(key, res.clone())); } catch { /* 캐시 실패는 무시 */ } }
+  return res;
+}
+
+const NOT_CANCELLED = "(cdeal_type IS NULL OR cdeal_type != 'Y')";
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    // ── 수집 상태 (점검봇·홈 화면 공용, 읽기 전용) ─────────────────────
+    // collect_logs 는 수집 스크립트가 (시군구×월) 한 번 성공할 때마다 한 줄 남긴다.
+    // 마지막 줄의 시각이 멈춰 있으면 새벽 수집이 안 돈 것이다.
+    if (url.pathname === '/api/health' && request.method === 'GET') {
+      try {
+        return await cachedJson(request, ctx, 300, async () => {
+          const { results: logs } = await env.DB.prepare(`
+            SELECT run_type,
+                   MAX(created_at) AS last_at,
+                   SUM(CASE WHEN created_at >= datetime('now','-24 hours') AND status = 'success' THEN count ELSE 0 END) AS changed24h,
+                   SUM(CASE WHEN created_at >= datetime('now','-24 hours') AND status != 'success' THEN 1 ELSE 0 END) AS errors24h,
+                   SUM(CASE WHEN created_at >= datetime('now','-24 hours') THEN 1 ELSE 0 END) AS calls24h
+            FROM collect_logs
+            WHERE id > (SELECT MAX(id) FROM collect_logs) - 30000
+            GROUP BY run_type
+          `).all();
+          const byType = Object.fromEntries(logs.map(r => [r.run_type, r]));
+          const pick = (...types) => {
+            const rows = types.map(t => byType[t]).filter(Boolean);
+            if (rows.length === 0) return null;
+            return {
+              lastCollectedAt: rows.map(r => r.last_at).sort().pop(),
+              changed24h: rows.reduce((s, r) => s + (r.changed24h || 0), 0),
+              errors24h: rows.reduce((s, r) => s + (r.errors24h || 0), 0),
+              calls24h: rows.reduce((s, r) => s + (r.calls24h || 0), 0),
+            };
+          };
+          const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10); // KST
+          const latest = async (table) => (await env.DB.prepare(
+            `SELECT MAX(deal_date) AS d FROM ${table} WHERE deal_date <= ?`
+          ).bind(today).first())?.d ?? null;
+          const [aptDate, villaDate] = await Promise.all([latest('apt_trades'), latest('villa_trades')]);
+          // 시세 동향 통계가 어느 달까지 만들어졌나 (수집과 별개 단계라 따로 본다)
+          const trendYm = (await env.DB.prepare('SELECT MAX(ym) AS ym FROM sgg_monthly_stats').first())?.ym ?? null;
+          return {
+            generatedAt: new Date().toISOString(),
+            apt:   { ...(pick('daily', 'incremental') ?? {}), latestDealDate: aptDate },
+            villa: { ...(pick('villa-daily', 'villa') ?? {}), latestDealDate: villaDate },
+            trend: { latestYm: trendYm },
+          };
+        });
+      } catch (e) {
+        return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: corsHeaders });
+      }
+    }
+
+    // ── 홈 대시보드: 최근 시장 요약 ─────────────────────────────────────
+    if (url.pathname === '/api/home' && request.method === 'GET') {
+      try {
+        return await cachedJson(request, ctx, 1800, async () => {
+          const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+          const latestDate = (await env.DB.prepare(
+            'SELECT MAX(deal_date) AS d FROM apt_trades WHERE deal_date <= ?'
+          ).bind(today).first())?.d;
+          if (!latestDate) return { latestDate: null };
+          const shift = (days) => {
+            const d = new Date(`${latestDate}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - days);
+            return d.toISOString().slice(0, 10);
+          };
+          const from60 = shift(59), from7 = shift(6), from30 = shift(29);
+
+          const [daily, top, sido, approx] = await Promise.all([
+            // 일별 거래량·평균가 (최근 60일 — 앞 30일은 비교용)
+            env.DB.prepare(`
+              SELECT deal_date, COUNT(*) AS trade_count, ROUND(AVG(deal_amount)) AS avg_amount
+              FROM apt_trades
+              WHERE deal_date >= ? AND deal_date <= ? AND ${NOT_CANCELLED}
+              GROUP BY deal_date ORDER BY deal_date
+            `).bind(from60, latestDate).all(),
+            // 최근 7일 최고가 거래
+            env.DB.prepare(`
+              SELECT t.apt_nm, t.sgg_cd, r.sido_nm, r.sgg_nm, t.umd_nm, t.exclu_use_ar, t.floor,
+                     t.deal_amount, t.deal_date, t.build_year
+              FROM apt_trades t LEFT JOIN regions r ON t.sgg_cd = r.sgg_cd
+              WHERE t.deal_date >= ? AND t.deal_date <= ?
+                AND (t.cdeal_type IS NULL OR t.cdeal_type != 'Y')
+              ORDER BY t.deal_amount DESC LIMIT 12
+            `).bind(from7, latestDate).all(),
+            // 시도별 최근 30일
+            env.DB.prepare(`
+              SELECT r.sido_cd, r.sido_nm, COUNT(*) AS trade_count, ROUND(AVG(t.deal_amount)) AS avg_amount
+              FROM apt_trades t JOIN regions r ON t.sgg_cd = r.sgg_cd
+              WHERE t.deal_date >= ? AND t.deal_date <= ?
+                AND (t.cdeal_type IS NULL OR t.cdeal_type != 'Y')
+              GROUP BY r.sido_cd, r.sido_nm ORDER BY trade_count DESC
+            `).bind(from30, latestDate).all(),
+            // 누적 건수는 전수 COUNT 대신 마지막 id 로 어림한다 (수백만 행 스캔 방지)
+            env.DB.prepare('SELECT MAX(id) AS n FROM apt_trades').first(),
+          ]);
+          return {
+            generatedAt: new Date().toISOString(),
+            latestDate,
+            daily: daily.results,
+            topTrades: top.results,
+            bySido: sido.results,
+            approxTotal: approx?.n ?? null,
+          };
+        });
+      } catch (e) {
+        return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: corsHeaders });
+      }
+    }
 
     if (url.pathname === '/api/regions') {
       try {
@@ -210,6 +332,59 @@ export default {
         return new Response(JSON.stringify({ results }), { headers: corsHeaders });
       } catch (e) {
         return new Response(JSON.stringify({ error: e.message }), { status: 400, headers: corsHeaders });
+      }
+    }
+
+    // ── 날짜별 실거래 (아파트) ─────────────────────────────────────────
+    if (url.pathname === '/api/daily-trades' && request.method === 'GET') {
+      try {
+        const date = url.searchParams.get('date');
+
+        if (!date) {
+          // 가장 최근 거래일 반환
+          const { results } = await env.DB.prepare(
+            'SELECT deal_date FROM apt_trades ORDER BY deal_date DESC LIMIT 1'
+          ).all();
+          const latestDate = results[0]?.deal_date ?? null;
+          return new Response(JSON.stringify({ latestDate }), { headers: corsHeaders });
+        }
+
+        // 지역별 요약 (구/군 단위 + 시도명)
+        const { results: summary } = await env.DB.prepare(`
+          SELECT t.sgg_cd, r.sgg_nm, r.sido_nm, r.sido_cd,
+                 COUNT(*) as trade_count,
+                 ROUND(AVG(t.deal_amount) / 10000.0, 1) as avg_eok,
+                 ROUND(MIN(t.deal_amount) / 10000.0, 1) as min_eok,
+                 ROUND(MAX(t.deal_amount) / 10000.0, 1) as max_eok
+          FROM apt_trades t
+          LEFT JOIN regions r ON t.sgg_cd = r.sgg_cd
+          WHERE t.deal_date = ?
+            AND (t.cdeal_type IS NULL OR t.cdeal_type != 'Y')
+          GROUP BY t.sgg_cd, r.sgg_nm, r.sido_nm, r.sido_cd
+          ORDER BY trade_count DESC
+        `).bind(date).all();
+
+        // 거래 목록 (해제거래 제외)
+        const { results: trades } = await env.DB.prepare(`
+          SELECT t.apt_nm, t.apt_dong, t.umd_nm,
+                 t.sgg_cd, r.sgg_nm,
+                 t.exclu_use_ar, t.area_group,
+                 t.floor, t.deal_amount,
+                 t.dealing_gbn, t.build_year
+          FROM apt_trades t
+          LEFT JOIN regions r ON t.sgg_cd = r.sgg_cd
+          WHERE t.deal_date = ?
+            AND (t.cdeal_type IS NULL OR t.cdeal_type != 'Y')
+          ORDER BY t.deal_amount DESC
+          LIMIT 5000
+        `).bind(date).all();
+
+        return new Response(
+          JSON.stringify({ date, summary, trades, total: trades.length }),
+          { headers: corsHeaders }
+        );
+      } catch (e) {
+        return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: corsHeaders });
       }
     }
 

@@ -1,26 +1,223 @@
 @import "tailwindcss";
 
+/*
+ * 디자인 토큰 — 화면의 모든 색은 여기서만 정한다.
+ * 컴포넌트는 bg-surface · text-ink · border-line 같은 '의미 이름'만 쓴다.
+ * 다크 모드는 아래 변수만 갈아 끼우므로 컴포넌트에 dark: 변형을 쓰지 않는다.
+ *
+ * 한국 시장 관례: 상승 = 빨강(up), 하락 = 파랑(down).
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #f4f6fa;
+  --surface: #ffffff;
+  --surface-2: #f7f8fb;
+  --surface-3: #eef1f6;
+  --line: #e3e7ee;
+  --line-strong: #cbd2de;
+  --ink: #131a2b;
+  --ink-2: #4a5468;
+  --ink-3: #8690a3;
+  --brand: #2f5bea;
+  --brand-strong: #1f45c4;
+  --brand-soft: #eaf0ff;
+  --brand-ink: #ffffff;
+  --up: #e0393e;
+  --up-soft: #fdecec;
+  --down: #2563eb;
+  --down-soft: #e8f0fe;
+  --ok: #12996b;
+  --ok-soft: #e4f6ef;
+  --warn: #c77a08;
+  --warn-soft: #fdf3e0;
+  --shadow-card: 0 1px 2px rgb(19 26 43 / 0.04), 0 4px 16px -6px rgb(19 26 43 / 0.08);
+  --shadow-pop: 0 12px 40px -8px rgb(19 26 43 / 0.25);
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: #0b0f18;
+  --surface: #131926;
+  --surface-2: #182031;
+  --surface-3: #1f293d;
+  --line: #242f44;
+  --line-strong: #36435c;
+  --ink: #e9edf5;
+  --ink-2: #a9b3c6;
+  --ink-3: #6f7b91;
+  --brand: #6d8dff;
+  --brand-strong: #8aa3ff;
+  --brand-soft: #1b2748;
+  --brand-ink: #0b0f18;
+  --up: #ff6b6f;
+  --up-soft: #3a1b1f;
+  --down: #6aa0ff;
+  --down-soft: #16264a;
+  --ok: #3ecf9a;
+  --ok-soft: #10302a;
+  --warn: #f0b04a;
+  --warn-soft: #382a10;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-pop: 0 16px 48px -8px rgb(0 0 0 / 0.6);
+  color-scheme: dark;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-ink: var(--brand-ink);
+  --color-up: var(--up);
+  --color-up-soft: var(--up-soft);
+  --color-down: var(--down);
+  --color-down-soft: var(--down-soft);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --shadow-card: var(--shadow-card);
+  --shadow-pop: var(--shadow-pop);
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+    "Malgun Gothic", system-ui, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-feature-settings: "tnum" 1, "ss06" 1; /* 숫자 폭 고정 — 가격 열이 흔들리지 않는다 */
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 숫자 전용 (가격·건수) */
+.num {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* 폼 기본기 — 어디서 써도 같은 모양 */
+.field {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: 0.625rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.field::placeholder {
+  color: var(--ink-3);
+}
+.field:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 22%, transparent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--brand);
+}
+
+/* 얇은 스크롤바 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+/* 표 공통 */
+.data-table {
+  width: 100%;
+  font-size: 0.875rem;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-align: left;
+  white-space: nowrap;
+  padding: 0.625rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+}
+.data-table tbody td {
+  padding: 0.625rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.data-table tbody tr:hover td {
+  background: var(--surface-2);
+}
+.data-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-3);
+  border-radius: 0.5rem;
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--surface) 60%, transparent), transparent);
+  animation: shimmer 1.4s infinite;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: rise 0.35s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise,
+  .skeleton::after {
+    animation: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
 }
