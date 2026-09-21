@@ -14,6 +14,11 @@ import { writeFileSync, unlinkSync, mkdirSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
+// 응답 없는 호출이 작업 전체를 5시간 붙잡던 문제(2026-09 취소 다발)를 막는다.
+// 시간이 넘으면 예외 → 기존 재시도·실패 로그 경로로 빠진다.
+const NET_TIMEOUT_MS  = 30_000;   // 국토부·카카오·CF API 한 번 호출
+const EXEC_TIMEOUT_MS = 180_000;  // wrangler d1 execute 한 번
+
 const API_BASE = 'https://apis.data.go.kr/1613000/RTMSDataSvcRHTrade/getRTMSDataSvcRHTrade';
 const API_KEY = process.env.MOLIT_API_KEY!;
 const KAKAO_KEY = process.env.KAKAO_REST_API_KEY!;
@@ -91,7 +96,7 @@ function executeSQLFile(sql: string): number {
   try {
     const raw = execSync(
       `${WRANGLER} d1 execute ${DB_NAME} --remote --file="${tmpFile}" --json 2>&1`,
-      { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 }
+      { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024, timeout: EXEC_TIMEOUT_MS }
     );
     const json = JSON.parse(extractJSON(raw));
     return json[0]?.meta?.changes ?? 0;
@@ -119,6 +124,7 @@ async function d1Query<T = Record<string, unknown>>(
   const res = await fetch(
     `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/d1/database/${CF_D1_DATABASE_ID}/query`,
     {
+      signal: AbortSignal.timeout(NET_TIMEOUT_MS),
       method: 'POST',
       headers: { Authorization: `Bearer ${CF_API_TOKEN}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ sql, params }),
@@ -155,7 +161,7 @@ async function fetchTrades(sggCd: string, dealYmd: string): Promise<VillaItem[]>
   let pageNo = 1;
   while (true) {
     const url = `${API_BASE}?serviceKey=${API_KEY}&LAWD_CD=${sggCd}&DEAL_YMD=${dealYmd}&numOfRows=${NUM_OF_ROWS}&pageNo=${pageNo}&_type=json`;
-    const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT } });
+    const res = await fetch(url, { signal: AbortSignal.timeout(NET_TIMEOUT_MS), headers: { 'User-Agent': USER_AGENT } });
     const json = (await res.json()) as { response?: { body?: { items?: { item?: VillaItem | VillaItem[] }; totalCount?: number } } };
     const body = json?.response?.body;
     const raw = body?.items?.item;
@@ -264,7 +270,7 @@ async function geocodeKakao(sidoNm: string, sggNm: string, umdNm: string, jibun:
   : Promise<{ lat: number; lng: number; raw: string } | null> {
   const raw = `${sidoNm} ${sggNm} ${umdNm} ${jibun}`;
   const url = `https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURIComponent(raw)}`;
-  const res = await fetch(url, { headers: { Authorization: `KakaoAK ${KAKAO_KEY}` } });
+  const res = await fetch(url, { signal: AbortSignal.timeout(NET_TIMEOUT_MS), headers: { Authorization: `KakaoAK ${KAKAO_KEY}` } });
   if (!res.ok) throw new Error(`카카오 ${res.status}`);
   const json = (await res.json()) as { documents?: Array<{ address?: { x: string; y: string }; road_address?: { x: string; y: string } | null; x?: string; y?: string }> };
   const doc = json.documents?.[0];

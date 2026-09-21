@@ -12,6 +12,11 @@ import { writeFileSync, unlinkSync, mkdirSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
+// 응답 없는 호출이 작업 전체를 5시간 붙잡던 문제(2026-09 취소 다발)를 막는다.
+// 시간이 넘으면 예외 → 기존 재시도·실패 로그 경로로 빠진다.
+const NET_TIMEOUT_MS  = 30_000;   // 국토부·카카오·CF API 한 번 호출
+const EXEC_TIMEOUT_MS = 180_000;  // wrangler d1 execute 한 번
+
 function saveFailedLog(failedCombos: string[], label: string) {
   if (failedCombos.length === 0) return;
   const date = new Date().toISOString().slice(0, 10);
@@ -90,7 +95,7 @@ function executeSQLFile(sql: string): number {
   try {
     const raw = execSync(
       `${WRANGLER} d1 execute ${DB_NAME} --remote --file="${tmpFile}" --json 2>&1`,
-      { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 }
+      { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024, timeout: EXEC_TIMEOUT_MS }
     );
     const json = JSON.parse(extractJSON(raw));
     return json[0]?.meta?.changes ?? 0;
@@ -117,7 +122,7 @@ function executeBatched(items: TradeItem[], sggCd: string, chunkSize = 200): num
 function executeCommand(command: string): string {
   const raw = execSync(
     `${WRANGLER} d1 execute ${DB_NAME} --remote --command="${command}" --json 2>&1`,
-    { encoding: 'utf-8' }
+    { encoding: 'utf-8', timeout: EXEC_TIMEOUT_MS }
   );
   return extractJSON(raw);
 }
@@ -149,7 +154,7 @@ async function fetchTrades(sggCd: string, dealYmd: string): Promise<TradeItem[]>
 
   while (true) {
     const url = `${API_BASE}?serviceKey=${API_KEY}&LAWD_CD=${sggCd}&DEAL_YMD=${dealYmd}&numOfRows=${NUM_OF_ROWS}&pageNo=${pageNo}`;
-    const res    = await fetch(url);
+    const res    = await fetch(url, { signal: AbortSignal.timeout(NET_TIMEOUT_MS) });
     const xml    = await res.text();
     const parsed = parser.parse(xml);
     const body   = parsed?.response?.body;

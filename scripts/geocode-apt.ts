@@ -20,6 +20,11 @@ import { writeFileSync, unlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
+// 응답 없는 호출이 작업 전체를 5시간 붙잡던 문제(2026-09 취소 다발)를 막는다.
+// 시간이 넘으면 예외 → 기존 재시도·실패 로그 경로로 빠진다.
+const NET_TIMEOUT_MS  = 30_000;   // 국토부·카카오·CF API 한 번 호출
+const EXEC_TIMEOUT_MS = 180_000;  // wrangler d1 execute 한 번
+
 const KAKAO_KEY = process.env.KAKAO_REST_API_KEY!;
 const CF_ACCOUNT_ID = process.env.CF_ACCOUNT_ID ?? process.env.CLOUDFLARE_ACCOUNT_ID!;
 const CF_D1_DATABASE_ID = process.env.CF_D1_DATABASE_ID ?? 'e60d3a7f-2ae9-4058-af50-f4f2b34d209d';
@@ -47,6 +52,7 @@ async function d1Query<T = Record<string, unknown>>(
   const res = await fetch(
     `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/d1/database/${CF_D1_DATABASE_ID}/query`,
     {
+      signal: AbortSignal.timeout(NET_TIMEOUT_MS),
       method: 'POST',
       headers: {
         Authorization: `Bearer ${CF_API_TOKEN}`,
@@ -86,7 +92,7 @@ function executeSQLFile(sql: string): number {
   try {
     const raw = execSync(
       `${WRANGLER} d1 execute ${DB_NAME} --remote --file="${tmpFile}" --json 2>&1`,
-      { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 },
+      { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024, timeout: EXEC_TIMEOUT_MS },
     );
     const json = JSON.parse(extractJSON(raw));
     return json[0]?.meta?.changes ?? 0;
@@ -127,6 +133,7 @@ interface KakaoResp {
 async function geocodeKakao(query: string): Promise<{ lat: number; lng: number } | null> {
   const url = `https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURIComponent(query)}`;
   const res = await fetch(url, {
+    signal: AbortSignal.timeout(NET_TIMEOUT_MS),
     headers: { Authorization: `KakaoAK ${KAKAO_KEY}` },
   });
   if (!res.ok) {
